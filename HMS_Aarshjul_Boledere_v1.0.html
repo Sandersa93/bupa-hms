@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HMS-årshjul — Boledere Bupa AS</title>
+
+<!--
+╔══════════════════════════════════════════════════════════════════════╗
+║  HMS-ÅRSHJUL FOR BOLEDERE — BUPA AS 2026–2027                       ║
+║  Versjon: v1.0  |  Dato: 2026-05-30                                 ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  SLIK REDIGERER DU INNHOLDET:                                        ║
+║                                                                      ║
+║  Finn "const DATA" lenger ned. 12 objekter — ett per måned.         ║
+║  Hvert objekt har én liste "items" med aktiviteter.                  ║
+║                                                                      ║
+║  Hvert element i listen har tre felt:                                ║
+║    name: 'Aktivitetsnavn'          ← vises på hjulet                ║
+║    desc: 'Beskrivelse til boleder' ← vises ved klikk                ║
+║    url:  ''                        ← lenke til prosedyre (tom nå)   ║
+║    status: 'active'                ← ikke i bruk ennå (Fase 2)      ║
+║                                                                      ║
+║  Eksempel — legg til i oktober:                                      ║
+║    { name: 'Ny aktivitet',                                           ║
+║      desc: 'Hva boleder skal gjøre.',                                ║
+║      url: '', status: 'active' }                                     ║
+║                                                                      ║
+║  POWER APPS:                                                         ║
+║  Last opp til SharePoint. I Power Apps brukes Launch()-funksjonen:  ║
+║  Launch("https://bupaas.sharepoint.com/...filsti...")               ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
+-->
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0a1a16;
+  font-family: Arial, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px;
+}
+#hw {
+  position: relative;
+  width: 100%;
+  max-width: 860px;
+  background: #0d1f19;
+  border-radius: 16px;
+  padding: 28px 24px;
+  overflow: hidden;
+}
+#hw::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 25% 35%, rgba(29,122,122,0.2) 0%, transparent 58%),
+    radial-gradient(ellipse at 72% 68%, rgba(15,110,86,0.12) 0%, transparent 52%);
+  pointer-events: none;
+}
+#hw-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 28px;
+  position: relative;
+  z-index: 1;
+}
+#canvas-wrap { flex-shrink: 0; width: 340px; }
+#canvas-wrap svg { width: 340px; height: 340px; display: block; }
+#detail { flex: 1; min-width: 0; padding-top: 4px; }
+#hdr { margin-bottom: 18px; }
+#hdr h1 {
+  font-size: 13px; font-weight: 500; letter-spacing: 0.14em;
+  text-transform: uppercase; color: rgba(93,202,165,0.5); margin-bottom: 3px;
+}
+#hdr p { font-size: 11px; color: rgba(93,202,165,0.28); letter-spacing: 0.06em; }
+#month-title { font-size: 22px; font-weight: 500; color: #9FE1CB; margin-bottom: 2px; min-height: 28px; }
+#month-meta {
+  font-size: 11px; color: rgba(159,225,203,0.4); letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 14px; min-height: 16px;
+}
+#progress-bar {
+  height: 3px; background: rgba(29,122,122,0.18);
+  border-radius: 2px; margin-bottom: 18px; overflow: hidden;
+}
+#progress-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, #1D7A7A, #5DCAA5);
+  transition: width 0.4s ease; width: 0%;
+}
+.section-label {
+  font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase;
+  color: rgba(93,202,165,0.38); margin-bottom: 8px; font-weight: 500;
+}
+.act-card {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: rgba(29,122,122,0.09);
+  border: 0.5px solid rgba(29,122,122,0.25);
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+  cursor: pointer; transition: background 0.18s, border-color 0.18s;
+}
+.act-card:hover { background: rgba(29,122,122,0.2); border-color: rgba(93,202,165,0.35); }
+.act-card.open { background: rgba(29,122,122,0.22); border-color: rgba(93,202,165,0.4); }
+.act-icon {
+  width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  background: rgba(93,202,165,0.14); color: #5DCAA5;
+}
+.act-right { flex: 1; min-width: 0; }
+.act-name {
+  font-size: 13px; color: #d8f0e8; line-height: 1.4;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.act-arrow {
+  font-size: 11px; color: rgba(93,202,165,0.4);
+  transition: transform 0.2s; flex-shrink: 0;
+}
+.act-card.open .act-arrow { transform: rotate(90deg); color: #5DCAA5; }
+.act-body {
+  display: none; margin-top: 8px; padding-top: 8px;
+  border-top: 0.5px solid rgba(29,122,122,0.25);
+}
+.act-body.visible { display: block; }
+.act-desc { font-size: 12px; color: rgba(159,225,203,0.65); line-height: 1.6; margin-bottom: 8px; }
+.act-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: #5DCAA5; text-decoration: none;
+  background: rgba(93,202,165,0.1); border: 0.5px solid rgba(93,202,165,0.25);
+  border-radius: 6px; padding: 4px 10px; transition: background 0.15s;
+}
+.act-link:hover { background: rgba(93,202,165,0.2); }
+.act-link-placeholder {
+  display: inline-block; font-size: 11px;
+  color: rgba(93,202,165,0.25); font-style: italic;
+}
+#empty-msg { color: rgba(159,225,203,0.28); font-size: 13px; font-style: italic; margin-top: 28px; text-align: center; }
+.legend { display: flex; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+.leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(93,202,165,0.4); }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+@keyframes pulseAnim { 0%,100%{ opacity:.15; } 50%{ opacity:.38; } }
+.pulse-anim { animation: pulseAnim 2.4s ease-in-out infinite; }
+@keyframes currentGlow { 0%,100%{ opacity:.5; } 50%{ opacity:1; } }
+.current-glow { animation: currentGlow 2s ease-in-out infinite; }
+@media (max-width: 620px) {
+  #hw-inner { flex-direction: column; align-items: center; }
+  #canvas-wrap { width: 300px; }
+  #canvas-wrap svg { width: 300px; height: 300px; }
+}
+</style>
+</head>
+<body>
+<div id="hw">
+  <div id="hw-inner">
+    <div id="canvas-wrap">
+      <svg id="wsvg" viewBox="0 0 320 320"
+        role="img"
+        aria-label="HMS-årshjul for boledere, Bupa AS 2026–2027. Klikk på en måned for å se aktiviteter.">
+      </svg>
+    </div>
+    <div id="detail">
+      <div id="hdr">
+        <h1>HMS-årshjul — Boledere</h1>
+        <p>Brukerbolig og bruker-eid bolig · 2026–2027</p>
+      </div>
+      <div id="month-title">Velg en måned</div>
+      <div id="month-meta">Klikk på hjulet</div>
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+      <div id="acts"><p id="empty-msg">Klikk på et segment for å se aktiviteter.</p></div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:#1D7A7A"></div>Lovpålagt aktivitet</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#5DCAA5"></div>Denne måneden</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#152820"></div>Ingen aktivitet</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// REDIGER INNHOLD HER
+// 12 objekter — ett per måned (juli 2026 → juni 2027)
+//
+// Hvert element i "items":
+//   name:   Aktivitetsnavn (kort — vises på kortet)
+//   desc:   Beskrivelse til boleder (hva skal gjøres, hjemmel)
+//   url:    Lenke til prosedyre/skjema — sett inn URL når klar, la stå '' til da
+//   status: 'active' — reservert for Fase 2 (fullført/mangler)
+// ═══════════════════════════════════════════════════════════════════════
+const DATA = [
+  // 0 — Juli 2026
+  { items: [
+    { name: 'Vernerunde — brukerbolig',
+      desc: 'Gjennomfør planlagt sommervernerunde. Dokumenter funn i avvikssystemet. Hjemmel: Arbeidsmiljøloven §3-1, internkontrollforskriften §5.',
+      url: '', status: 'active' },
+    { name: 'Oppdater beredskapsplan',
+      desc: 'Kontroller at beredskapsplan er oppdatert med gjeldende personell og kontaktinformasjon for sommersesong.',
+      url: '', status: 'active' }
+  ]},
+  // 1 — August 2026
+  { items: [
+    { name: 'Gjennomgang av avviksliste',
+      desc: 'Gå gjennom åpne avvik fra siste periode. Sett frister og ansvarlig for uløste punkter. Hjemmel: Internkontrollforskriften §5.',
+      url: '', status: 'active' },
+    { name: 'Sjekk brannvern og utstyr',
+      desc: 'Kontroller brannslukningsutstyr, røykvarslere og rømningsveier. Dokumenter i brannvern-egenkontroll. Hjemmel: Brann- og eksplosjonsvernloven.',
+      url: '', status: 'active' }
+  ]},
+  // 2 — September 2026
+  { items: [
+    { name: 'AMU-møte Q3',
+      desc: 'Delta på eller forbered innspill til AMU-møte for tredje kvartal. Meld fra om HMS-utfordringer ved din lokasjon.',
+      url: '', status: 'active' },
+    { name: 'Vernerunde — alle rom og uteområder',
+      desc: 'Høstvernerunde med gjennomgang av inneklima, belysning, uteområder og rømningsveier. Hjemmel: Arbeidsmiljøloven §3-1.',
+      url: '', status: 'active' },
+    { name: 'Ergonomikartlegging',
+      desc: 'Kartlegg arbeidsstasjoner og tunge løft. Meld avvik ved funn. Hjemmel: Arbeidsmiljøloven §4-4.',
+      url: '', status: 'active' }
+  ]},
+  // 3 — Oktober 2026
+  { items: [
+    { name: 'Brannøvelse',
+      desc: 'Gjennomfør brannøvelse med alle ansatte og beboere. Dokumenter deltakelse og evaluer rømningsplan. Hjemmel: Brann- og eksplosjonsvernloven §7.',
+      url: '', status: 'active' },
+    { name: 'Opplæring nye ansatte — HMS',
+      desc: 'Sørg for at nye ansatte har fått HMS-opplæring og introduksjon til beredskapsplan og rømningsveier. Hjemmel: Arbeidsmiljøloven §3-2.',
+      url: '', status: 'active' }
+  ]},
+  // 4 — November 2026
+  { items: [
+    { name: 'AMU-møte Q4',
+      desc: 'Delta på eller forbered innspill til AMU-møte for fjerde kvartal.',
+      url: '', status: 'active' },
+    { name: 'Psykososialt arbeidsmiljø — sjekk',
+      desc: 'Gjennomfør samtale med ansatte om arbeidsmiljø og trivsel. Meld avvik ved bekymringer. Hjemmel: Arbeidsmiljøloven §4-3.',
+      url: '', status: 'active' }
+  ]},
+  // 5 — Desember 2026
+  { items: [
+    { name: 'Internkontroll-gjennomgang',
+      desc: 'Gå gjennom årets avviksliste og tiltaksliste. Dokumenter status og forbered årsoppsummering til HVO. Hjemmel: Internkontrollforskriften §5.',
+      url: '', status: 'active' },
+    { name: 'Prosedyregjennomgang',
+      desc: 'Kontroller at gjeldende prosedyrer er lest og signert av alle ansatte ved lokasjonen.',
+      url: '', status: 'active' }
+  ]},
+  // 6 — Januar 2027
+  { items: [
+    { name: 'AMU-møte Q1 — årsplan',
+      desc: 'Nytt HMS-år. Delta i planlegging av årets HMS-aktiviteter. Meld behov fra din lokasjon.',
+      url: '', status: 'active' },
+    { name: 'Oppdater risikovurdering',
+      desc: 'Gjennomfør eller oppdater risikovurdering for lokasjonen. Hjemmel: Internkontrollforskriften §5, Arbeidsmiljøloven §3-1.',
+      url: '', status: 'active' }
+  ]},
+  // 7 — Februar 2027
+  { items: [
+    { name: 'Sykefraværsoppfølging',
+      desc: 'Gjennomfør oppfølgingssamtale ved sykefravær over 4 uker (dialogmøte 1). Hjemmel: Arbeidsmiljøloven §4-6, Folketrygdloven §8-7a.',
+      url: '', status: 'active' },
+    { name: 'Vernerunde Q1',
+      desc: 'Første kvartalsvise vernerunde. Fokus på inneklima og arbeidsforhold etter vinteren. Hjemmel: Arbeidsmiljøloven §3-1.',
+      url: '', status: 'active' }
+  ]},
+  // 8 — Mars 2027
+  { items: [
+    { name: 'AMU-møte',
+      desc: 'Delta på AMU-møte og meld inn HMS-status fra lokasjonen.',
+      url: '', status: 'active' },
+    { name: 'Risikovurdering — start årsrunde',
+      desc: 'Gjennomfør årets risikovurdering for arbeidsområder og brukerrelaterte risikoer. Hjemmel: Internkontrollforskriften §5.',
+      url: '', status: 'active' }
+  ]},
+  // 9 — April 2027
+  { items: [
+    { name: 'AMU-møte Q2',
+      desc: 'Delta på AMU-møte for andre kvartal.',
+      url: '', status: 'active' },
+    { name: 'Vernerunde vår',
+      desc: 'Vårvernerunde med fokus på uteområder, vedlikehold og sesongbetingede risikoer. Hjemmel: Arbeidsmiljøloven §3-1.',
+      url: '', status: 'active' }
+  ]},
+  // 10 — Mai 2027
+  { items: [
+    { name: 'Brannvern egenkontroll',
+      desc: 'Gjennomfør egenkontroll av brannvern: utstyr, varsling, rømningsveier og opplæring. Hjemmel: Brann- og eksplosjonsvernloven.',
+      url: '', status: 'active' },
+    { name: 'Ergonomi og tunge løft — gjennomgang',
+      desc: 'Gjennomgang av arbeidsstillinger og hjelpemidler ved tunge løft og forflyting. Hjemmel: Arbeidsmiljøloven §4-4.',
+      url: '', status: 'active' }
+  ]},
+  // 11 — Juni 2027
+  { items: [
+    { name: 'Årshjul-evaluering',
+      desc: 'Gå gjennom årets HMS-aktiviteter. Hva ble gjort, hva mangler? Meld inn til HVO. Hjemmel: Internkontrollforskriften §5.',
+      url: '', status: 'active' },
+    { name: 'AMU-årsrapport',
+      desc: 'Bidra med lokasjonsdata til AMU-årsrapport. Oversikt over avvik, tiltak og status.',
+      url: '', status: 'active' }
+  ]}
+];
+// ═══════════════════════════════════════════════════════════════════════
+
+const MONTHS = [
+  {n:'Juli',y:2026},{n:'August',y:2026},{n:'September',y:2026},
+  {n:'Oktober',y:2026},{n:'November',y:2026},{n:'Desember',y:2026},
+  {n:'Januar',y:2027},{n:'Februar',y:2027},{n:'Mars',y:2027},
+  {n:'April',y:2027},{n:'Mai',y:2027},{n:'Juni',y:2027}
+];
+
+// Finn nåværende måned-indeks (0 = juli 2026, 11 = juni 2027)
+function getCurrentIdx(){
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth(); // 0-jan
+  const map = [
+    [2026,6],[2026,7],[2026,8],[2026,9],[2026,10],[2026,11],
+    [2027,0],[2027,1],[2027,2],[2027,3],[2027,4],[2027,5]
+  ];
+  for(let i=0;i<map.length;i++){
+    if(map[i][0]===y && map[i][1]===m) return i;
+  }
+  return 0;
+}
+const CURRENT = getCurrentIdx();
+
+const ns='http://www.w3.org/2000/svg';
+const cx=160,cy=160,R=148,Rmid=92,Rin=58,N=12,sa=-Math.PI/2;
+
+function pt(r,a){ return [cx+r*Math.cos(a), cy+r*Math.sin(a)]; }
+function arc(r1,r2,a1,a2){
+  const lg=(a2-a1)>Math.PI?1:0;
+  const [x1,y1]=pt(r2,a1),[x2,y2]=pt(r2,a2),[x3,y3]=pt(r1,a2),[x4,y4]=pt(r1,a1);
+  return `M${x1},${y1} A${r2},${r2} 0 ${lg} 1 ${x2},${y2} L${x3},${y3} A${r1},${r1} 0 ${lg} 0 ${x4},${y4} Z`;
+}
+function svgEl(tag,attrs){
+  const e=document.createElementNS(ns,tag);
+  for(const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+  return e;
+}
+
+const svg=document.getElementById('wsvg');
+
+// Ytre glødende ring
+svg.appendChild(svgEl('circle',{cx,cy,r:155,fill:'none',stroke:'rgba(29,122,122,0.12)','stroke-width':'7'}));
+
+// Pulserende aktiv-ring
+const pulseRing=svgEl('circle',{cx,cy,r:96,fill:'none',stroke:'#5DCAA5','stroke-width':'1.5',opacity:'0'});
+svg.appendChild(pulseRing);
+
+// Uthevet nåværende måned — glødende ring bak
+const a1c=sa+(CURRENT/N)*2*Math.PI, a2c=sa+((CURRENT+1)/N)*2*Math.PI;
+const currentHighlight=svgEl('path',{
+  d:arc(Rmid,R+6,a1c+0.01,a2c-0.01),
+  fill:'rgba(93,202,165,0.13)',
+  stroke:'#5DCAA5',
+  'stroke-width':'1.5',
+  opacity:'0.7'
+});
+currentHighlight.classList.add('current-glow');
+svg.appendChild(currentHighlight);
+
+const segs=[];
+MONTHS.forEach((m,i)=>{
+  const a1=sa+(i/N)*2*Math.PI, a2=sa+((i+1)/N)*2*Math.PI, amid=(a1+a2)/2;
+  const d=DATA[i], hasItems=d.items.length>0, isCurrent=(i===CURRENT);
+
+  const g=document.createElementNS(ns,'g');
+  g.style.cursor='pointer';
+
+  const baseFill = isCurrent ? '#25A882' : (hasItems ? '#1D7A7A' : '#152820');
+  const seg=svgEl('path',{
+    d:arc(Rmid,R-1,a1+0.022,a2-0.022),
+    fill:baseFill,
+    stroke:'rgba(0,0,0,0.42)',
+    'stroke-width':'1'
+  });
+  g.appendChild(seg);
+
+  // Glanseffekt
+  if(hasItems){
+    g.appendChild(svgEl('path',{
+      d:arc(Rmid+4,R-5,a1+0.032,a2-0.032),
+      fill:isCurrent?'rgba(93,202,165,0.13)':'rgba(93,202,165,0.06)',
+      stroke:'none'
+    }));
+  }
+
+  // Månedsnavn
+  const [tx,ty]=pt(R-15,amid);
+  const tEl=svgEl('text',{
+    x:tx,y:ty,'text-anchor':'middle','dominant-baseline':'central',
+    'font-size':isCurrent?'10':'9.5',
+    'font-weight':isCurrent?'700':'500',
+    fill:hasItems?(isCurrent?'#ffffff':'#d8f0e8'):'rgba(93,202,165,0.25)',
+    transform:`rotate(${(amid*180/Math.PI)+90},${tx},${ty})`
+  });
+  tEl.textContent=m.n;
+  g.appendChild(tEl);
+
+  // Antall-prikker
+  if(hasItems){
+    const cnt=Math.min(d.items.length,3);
+    for(let k=0;k<cnt;k++){
+      const da=amid+(k-(cnt-1)/2)*0.22;
+      const [dx,dy]=pt((Rin+Rmid)/2,da);
+      g.appendChild(svgEl('circle',{cx:dx,cy:dy,r:'2.2',
+        fill:isCurrent?'rgba(255,255,255,0.7)':'rgba(93,202,165,0.5)'}));
+    }
+  }
+
+  // Skillelinje
+  const [lx1,ly1]=pt(Rin,a1+0.012),[lx2,ly2]=pt(R,a1+0.012);
+  g.appendChild(svgEl('line',{x1:lx1,y1:ly1,x2:lx2,y2:ly2,stroke:'rgba(0,0,0,0.45)','stroke-width':'0.5'}));
+
+  g.addEventListener('click',()=>select(i));
+  svg.appendChild(g);
+  segs.push({g,seg,hasItems,isCurrent,baseFill});
+});
+
+// Senterplate
+svg.appendChild(svgEl('circle',{cx,cy,r:Rin,fill:'#071310',stroke:'rgba(29,122,122,0.35)','stroke-width':'1.5'}));
+svg.appendChild(svgEl('circle',{cx,cy,r:Rin-7,fill:'none',stroke:'rgba(29,122,122,0.1)','stroke-width':'1'}));
+
+[{t:'HMS',y:cy-14,sz:15,w:500,fill:'#5DCAA5'},
+ {t:'BUPA AS',y:cy+2,sz:9,w:500,fill:'rgba(93,202,165,0.52)',ls:'0.16em'},
+ {t:'2026\u20132027',y:cy+16,sz:8,w:400,fill:'rgba(93,202,165,0.3)',ls:'0.08em'}
+].forEach(({t,y,sz,w,fill,ls})=>{
+  const ct=svgEl('text',{x:cx,y,'text-anchor':'middle','dominant-baseline':'central',
+    'font-size':sz,'font-weight':w,fill});
+  if(ls) ct.setAttribute('letter-spacing',ls);
+  ct.textContent=t;
+  svg.appendChild(ct);
+});
+
+function select(i){
+  segs.forEach(({seg,hasItems,isCurrent,baseFill},j)=>{
+    if(j===i){
+      seg.setAttribute('fill',hasItems?(isCurrent?'#2dba92':'#25A882'):'#1a3028');
+      seg.setAttribute('stroke','rgba(93,202,165,0.5)');
+    } else {
+      seg.setAttribute('fill',baseFill);
+      seg.setAttribute('stroke','rgba(0,0,0,0.42)');
+    }
+  });
+
+  pulseRing.setAttribute('opacity','1');
+  pulseRing.classList.add('pulse-anim');
+
+  const pct=Math.round(((i+1)/N)*100);
+  document.getElementById('progress-fill').style.width=pct+'%';
+
+  const m=MONTHS[i], d=DATA[i], tot=d.items.length;
+  const isCurrent=(i===CURRENT);
+  document.getElementById('month-title').textContent=m.n+(isCurrent?' \u2014 denne måneden':'');
+  document.getElementById('month-meta').textContent=
+    m.y+(tot>0?' \u00b7 '+tot+' aktivitet'+(tot===1?'':'er'):'');
+
+  if(!tot){
+    document.getElementById('acts').innerHTML='<p id="empty-msg">Ingen aktiviteter registrert ennå.</p>';
+    return;
+  }
+
+  let html='<div class="section-label">Lovpålagte HMS-aktiviteter</div>';
+  d.items.forEach((item,idx)=>{
+    html+=`<div class="act-card" id="card-${i}-${idx}" onclick="toggleCard(${i},${idx})">
+      <div class="act-icon">&#10003;</div>
+      <div class="act-right">
+        <div class="act-name">
+          <span>${item.name}</span>
+          <span class="act-arrow">&#9654;</span>
+        </div>
+        <div class="act-body" id="body-${i}-${idx}">
+          <p class="act-desc">${item.desc}</p>
+          ${item.url
+            ? `<a class="act-link" href="${item.url}" target="_blank">&#128196; Åpne prosedyre</a>`
+            : `<span class="act-link-placeholder">Prosedyre-lenke legges til her</span>`
+          }
+        </div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('acts').innerHTML=html;
+}
+
+function toggleCard(monthIdx, itemIdx){
+  const card=document.getElementById(`card-${monthIdx}-${itemIdx}`);
+  const body=document.getElementById(`body-${monthIdx}-${itemIdx}`);
+  const isOpen=card.classList.contains('open');
+  // Lukk alle andre
+  document.querySelectorAll('.act-card.open').forEach(c=>c.classList.remove('open'));
+  document.querySelectorAll('.act-body.visible').forEach(b=>b.classList.remove('visible'));
+  if(!isOpen){
+    card.classList.add('open');
+    body.classList.add('visible');
+  }
+}
+
+// Start på nåværende måned
+select(CURRENT);
+</script>
+</body>
+</html>
